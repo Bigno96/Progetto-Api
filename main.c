@@ -5,7 +5,7 @@
 #include <ctype.h>
 
 #define BUFFER_SIZE 5+1
-#define TRANSITION_SIZE 30+1
+#define TRANSITION_SIZE 50+1
 #define READING_BUFFER_SIZE 100+1
 
 // node for TM graph
@@ -60,7 +60,18 @@ state_t* acceptance_head = NULL;
 queue_t* front = NULL;
 queue_t* rear = NULL;
 
-//FILE * file = NULL;
+const char SEPARATOR = '$';
+
+FILE * file = NULL;
+
+// replace eol with null
+void clean_eol(char *str);
+
+// Function to remove all spaces from a given string
+void remove_spaces(char *str);
+
+// used to insert $ separator between element of transitions
+void insert_separator(char *str);
 
 // used to find the list of state with number i, starting from 0
 // return pointer to node searched, null if none
@@ -109,7 +120,7 @@ void print_tape(tape_t* head, int pointer) {
 
     tape_t* tmp = head;
 
-    while(tmp != NULL) {
+    while(tmp) {
         if (tmp->position == pointer)
             printf("|%s| ", &tmp->character);
         else
@@ -123,7 +134,7 @@ void print_tape(tape_t* head, int pointer) {
 
 int main(int argc, char *argv[]) {
 
-    //file = fopen("pubblico.txt", "r");
+    file = fopen("Test/pubblico.txt", "r");
 
     int max_transitions = 0;
     char *ptr;
@@ -142,41 +153,30 @@ int main(int argc, char *argv[]) {
     char read_buffer[READING_BUFFER_SIZE];
 
     char ret = '0';
-    char *c = NULL;
 
     // reading "tr"
-    if (fgets(buffer, BUFFER_SIZE, stdin) != NULL) {
-        c = strchr(buffer, '\n');            // removes the EOL appended by fgets, if there's any
-        if (c)
-            *c = '\0';
-        if (strcmp(buffer, "tr") == 0)
-            set_transition();
-    }
+    if (fgets(buffer, BUFFER_SIZE, file))
+        clean_eol(buffer);
+
+    if (strcmp(buffer, "tr") == 0)
+        set_transition();
 
     // here, already read the string "max"
-    if (fgets(buffer, BUFFER_SIZE, stdin) != NULL) {
-        c = strchr(buffer, '\n');            // removes the EOL appended by fgets, if there's any
-        if (c)
-            *c = '\0';
-        max_transitions = strtol(buffer, &ptr, 10);
-    }
+    if (fgets(buffer, BUFFER_SIZE, file))
+        clean_eol(buffer);
+
+    max_transitions = strtol(buffer, &ptr, 10);
 
     // reading "run"
-    if (fgets(buffer, BUFFER_SIZE, stdin) != NULL) {
-        c = strchr(buffer, '\n');            // removes the EOL appended by fgets, if there's any
-        if (c)
-            *c = '\0';
-    }
+    if (fgets(buffer, BUFFER_SIZE, file))
+        clean_eol(buffer);
 
     if (strcmp(buffer, "run") == 0) {
 
-        while (feof(stdin) == 0) {          // until end of stdin is reached
+        while (feof(file) == 0) {          // until end of file is reached
 
-            if (fgets(read_buffer, READING_BUFFER_SIZE, stdin) != NULL) {     // read first string
-                char *c = strchr(read_buffer, '\n');                // removes the EOL appended by fgets, if there's any
-                if (c)
-                    *c = '\0';
-            }
+            if (fgets(read_buffer, READING_BUFFER_SIZE, file))      // read first string
+                clean_eol(read_buffer);
 
             copy_input_to_tape(read_buffer);         // copy the string input into tape memory
             tape_pointer = 0;
@@ -194,7 +194,7 @@ int main(int argc, char *argv[]) {
                 else {
                     move = find_array_element(&pre, queue_elem->current_state);      // if not, get the first transition with the current state taken from the queue
 
-                    while (move != NULL) {                                      // iterate over all moves
+                    while (move) {                                      // iterate over all moves
 
                         pointed_element = find_tape_element(queue_elem->copy_tape_head, queue_elem->copy_tape_pointer);
 
@@ -239,6 +239,47 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+// replace eol with null
+void clean_eol(char *str) {
+    char *c = strchr(str, '\n');                // removes the EOL appended by fgets, if there's any
+    if (c)
+        *c = '\0';
+}
+
+// Function to remove all spaces from a given string
+void remove_spaces(char *str) {
+
+    int count = 0, i = 0;
+
+    for (i = 0; str[i]; i++)
+        if (str[i] != ' ')
+            str[count++] = str[i];
+
+    str[count] = '\0';
+}
+
+// used to insert $ separator between element of transitions
+void insert_separator(char *str) {
+
+    int pointer = 0, count = 0;
+    char tmp[TRANSITION_SIZE] = "\0";
+
+    strncpy(tmp, str, TRANSITION_SIZE);
+
+    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is not a number
+         str[count++] = tmp[pointer++];
+
+    str[count++] = SEPARATOR;
+
+    while (tmp[pointer] < 48 || tmp[pointer] > 57) {        // add separator
+        str[count++] = tmp[pointer++];
+        str[count++] = SEPARATOR;
+    }
+
+    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is not a number
+         str[count++] = tmp[pointer++];
+}
+
 // used to find the list of state with number i, starting from 0
 // return pointer to node searched, null if none
 // pre is modified to point to previous element in the collection
@@ -246,7 +287,7 @@ transition_t* find_array_element(transition_t* *pre, int position) {
 
     transition_t* ret = tm_head;           // return is pointed to head at first
 
-    while (ret != NULL && ret->start_state != position) {
+    while (ret && ret->start_state != position) {
         *pre = ret;                      // pre is set to previous value
         ret = ret->right_state;         // ret is set to the next state
     }
@@ -260,13 +301,13 @@ void add_next_transition(transition_t* next) {
     transition_t* pre = NULL;
     transition_t* found_state = find_array_element(&pre, next->start_state);       // find state position based on start_state
 
-    if (found_state == NULL && pre == NULL)    // if no elements, next is the head
+    if (!found_state && !pre)       // if no elements, next is the head
         tm_head = next;
-    else if (found_state != NULL && pre == NULL) {    // if first position, set him a next state
+    else if (found_state && !pre) {    // if first position, set him a next state
         next->next_state = found_state;
         tm_head = next;
     }
-    else if (found_state == NULL && pre != NULL) // if no state, but pre exists, next is set as right element of pre
+    else if (!found_state && pre)       // if no state, but pre exists, next is set as right element of pre
         pre->right_state = next;
     else {                                   // if a state is found, is set as next state of found state
         pre->right_state = next;
@@ -277,26 +318,25 @@ void add_next_transition(transition_t* next) {
 // used to set all transitions
 void set_transition() {
 
-    char tr[TRANSITION_SIZE];
+    char tr[TRANSITION_SIZE] = "\0";
     char *ptr;
     char *token[5];
     transition_t* next;
     int i = 0;
 
-    if (fgets(tr, TRANSITION_SIZE, stdin) != NULL) {
-        char *c = strchr(tr, '\n');            // removes the EOL appended by fgets, if there's any
-        if (c)
-            *c = '\0';
-    }
+    if (fgets(tr, TRANSITION_SIZE, file))
+        clean_eol(tr);
 
     while (strcmp(tr, "acc") != 0) {        // until acc is found, read a line
         next = (transition_t*) malloc(sizeof(transition_t));    // allocate a new transition
 
-        token[0] = strtok(tr, " ");       // locate first token
-        while (token[i] != NULL) {          // locate all other token
-            i++;
-            token[i] = strtok(NULL, " ");     // call with NULL implies the usage of the previous input
-        }
+        remove_spaces(tr);
+        insert_separator(tr);
+
+        token[i] = strtok(tr, &SEPARATOR);       // locate first token
+        while (token[i])           // locate all other token
+            token[++i] = strtok(NULL, &SEPARATOR);     // call with NULL implies the usage of the previous input
+
         i = 0;
 
         next->start_state = strtol(token[0], &ptr, 10);
@@ -308,43 +348,35 @@ void set_transition() {
         next->next_state = NULL;
         next->right_state = NULL;
 
-        add_next_transition(next);     // set all transition
+        add_next_transition(next);     // set transition in the list
 
-        if (fgets(tr, TRANSITION_SIZE, stdin) != NULL) {
-            char *c = strchr(tr, '\n');            // removes the EOL appended by fgets, if there's any
-            if (c)
-                *c = '\0';
-        }
+        if (fgets(tr, TRANSITION_SIZE, file))
+            clean_eol(tr);
     }
 
+    // here, "acc" is read
     set_acceptance_states();
 }
 
 // used to set acceptance state list
 void set_acceptance_states() {
 
-    char acc[BUFFER_SIZE];
+    char acc[BUFFER_SIZE] = "\0";
     char *ptr;
     state_t* next;
 
-    if (fgets(acc, BUFFER_SIZE, stdin) != NULL) {
-        char *c = strchr(acc, '\n');            // removes the EOL appended by fgets, if there's any
-        if (c)
-            *c = '\0';
-    }
+    if (fgets(acc, BUFFER_SIZE, file))
+        clean_eol(acc);
 
     while (strcmp(acc, "max") != 0) {        // until max is found, read a line
         next = (state_t*) malloc(sizeof(state_t));
         next->state_number = strtol(acc, &ptr, 10);
 
-        next->next = acceptance_head;
+        next->next = acceptance_head;       // insertion in the head
         acceptance_head = next;
 
-        if (fgets(acc, BUFFER_SIZE, stdin) != NULL) {
-            char *c = strchr(acc, '\n');            // removes the EOL appended by fgets, if there's any
-            if (c)
-                *c = '\0';
-        }
+        if (fgets(acc, BUFFER_SIZE, file))
+            clean_eol(acc);
     }
 }
 
@@ -516,6 +548,8 @@ queue_t* dequeue() {
 // used to clean the queue
 void clean_queue() {
 
-    while (front != NULL)
+    while (front)
         free(dequeue());
 }
+
+
