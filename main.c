@@ -186,6 +186,54 @@ void print_tape(tape_t* head, int pointer) {
     printf("\n");
 }
 
+/**
+*Prints a transition
+*/
+void print_transition(transition_t* tr) {
+
+    printf("%d %c %c %c %d", tr->start_state, tr->read_char, tr->write_char, tr->head_movement, tr->end_state);
+    printf(" || ");
+}
+
+/**
+* Prints out TM transitions graph
+*/
+void print_TM() {
+
+    transition_t* tmp = tm_head;
+    transition_t* next = NULL;
+
+    while(tmp) {
+        printf("\n");
+        next = tmp;
+
+        while(next) {
+            print_transition(next);
+            next = next->next_state;
+        }
+
+        tmp = tmp->right_state;
+        printf("\n");
+    }
+
+    printf("-------------\n");
+}
+
+/**
+* Prints out queue
+*/
+void print_queue() {
+
+    queue_t* tmp = front;
+
+    while(tmp) {
+        printf("%d", tmp->current_state);
+        printf(" | ");
+        tmp = tmp->next;
+    }
+    printf("\n");
+}
+
 //DELETE
 
 int main(int argc, char *argv[]) {
@@ -195,7 +243,8 @@ int main(int argc, char *argv[]) {
     int max_transitions = 0;
     char *ptr;
 
-    int move_count = 0;
+    int move_count = 0;                     // DELETE
+    int last_state_queued = 0;              // DELETE
 
     int tape_pointer = 0;
     tape_t* pointed_element = NULL;
@@ -236,12 +285,19 @@ int main(int argc, char *argv[]) {
 
             copy_input_to_tape(read_buffer);         // copy the string input into tape memory
             tape_pointer = 0;
-            enqueue(0, tape_head, tape_pointer, move_count);        // enqueue initial condition
+            enqueue(0, tape_head, tape_pointer, 0);        // enqueue initial condition
+
+            printf("\n");                   // DELETE
+            print_queue();                  // DELETE
+            print_tape(tape_head, tape_pointer);                   // DELETE
 
             // perform a BFS
             while (front) {             // until there's at least one element in the queue
 
                 queue_elem = dequeue();         // pull from queue
+
+                printf("\nDequeue\n");             // DELETE
+                move_count = queue_elem->move_count;        // DELETE
 
                 if (queue_elem->move_count == max_transitions) {     // if reached maximum number of moves, return U
                     ret = 'U';
@@ -274,9 +330,11 @@ int main(int argc, char *argv[]) {
 
                             printf("next state: %d\n", move->end_state);        // DELETE
                             print_tape(copy_tape_head, tape_pointer);           // DELETE
-                            printf("\n");                                       // DELETE
 
                             enqueue(move->end_state, copy_tape_head, tape_pointer, queue_elem->move_count+1);
+                            printf("Enqueueing\n\n");                       // DELETE
+
+                            last_state_queued = move->end_state;            // DELETE
                         }
 
                         move = move->next_state;
@@ -289,14 +347,13 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            fputs(&ret, stdout);
-            fputs("\n", stdout);
+            printf("%c\n", ret);
             fflush(stdout);
 
             ret = '0';
             clean_queue();
             empty_tape();
-            move_count = 0;
+            tape_pointer = 0;
         }
     }
 
@@ -336,7 +393,7 @@ void insert_separator(char *str) {
 
     strncpy(tmp, str, TRANSITION_SIZE);
 
-    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is not a number
+    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
          str[count++] = tmp[pointer++];
 
     str[count++] = SEPARATOR;
@@ -346,8 +403,10 @@ void insert_separator(char *str) {
         str[count++] = SEPARATOR;
     }
 
-    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is not a number
+    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
          str[count++] = tmp[pointer++];
+
+     str[count++] = SEPARATOR;
 }
 
 /**
@@ -377,15 +436,20 @@ void add_next_transition(transition_t* next) {
 
     if (!found_state && !pre)       // if no elements, next is the head
         tm_head = next;
-    else if (found_state && !pre) {    // if first position, set him a next state
+    else if (found_state && !pre) {    // if first position, set him has next state
         next->next_state = found_state;
+        next->right_state = found_state->right_state;
+        found_state->right_state = NULL;
         tm_head = next;
     }
-    else if (!found_state && pre)       // if no state, but pre exists, next is set as right element of pre
+    else if (!found_state && pre) {      // if no state, but pre exists, next is set as right element of pre
         pre->right_state = next;
+    }
     else {                                   // if a state is found, is set as next state of found state
         pre->right_state = next;
         next->next_state = found_state;
+        next->right_state = found_state->right_state;
+        found_state->right_state = NULL;
     }
 }
 
@@ -484,6 +548,9 @@ void copy_input_to_tape(char buffer[]) {
     tape_t* tmp = NULL;
 
     while (buffer[i] != '\0') {
+        printf("%c", buffer[i]);        // DELETE
+        fflush(stdout);                 // DELETE
+
         tmp = (tape_t*) malloc(sizeof(tape_t));
         tmp->character = buffer[i];
         tmp->position = i;
@@ -564,7 +631,7 @@ void empty_tape() {
     tape_t* current = tape_head;
     tape_t* next = NULL;
 
-    while(current) {
+    while (current) {
         next = current->next;
         free(current);
         current = next;
@@ -631,7 +698,7 @@ queue_t* dequeue() {
 
 	queue_t* tmp = front;
 
-	if(front == rear)
+	if (front == rear)
 		front = rear = NULL;
 	else
 		front = front->next;
