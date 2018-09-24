@@ -5,9 +5,9 @@
 #include <ctype.h>
 #include <sys/time.h>
 
-#define BUFFER_SIZE 5+1
+#define BUFFER_SIZE 15+1
 #define TRANSITION_SIZE 50+1
-#define READING_BUFFER_SIZE 100+1
+#define READING_BUFFER_SIZE 10000+1
 
 /**
 * node for TM graph
@@ -119,7 +119,7 @@ int find_acceptance(int current_state);
 /**
 * Writes down the input in the memory tape list
 */
-void copy_input_to_tape(char buffer[]);
+tape_t* copy_input_to_tape(char buffer[]);
 
 /**
 * Moves tape pointer, returns new value of it
@@ -158,16 +158,6 @@ queue_t* dequeue();
 void clean_queue();
 
 // DELETE
-
-/**
- * Returns the current time in microseconds.
- */
-long get_microtime() {
-	struct timeval currentTime;
-
-	gettimeofday(&currentTime, NULL);
-	return currentTime.tv_sec * (int)1e6 + currentTime.tv_usec;
-}
 
 /**
 * Prints out memory tape with pointer highlighted
@@ -243,9 +233,6 @@ int main(int argc, char *argv[]) {
     int max_transitions = 0;
     char *ptr;
 
-    int move_count = 0;                     // DELETE
-    int last_state_queued = 0;              // DELETE
-
     int tape_pointer = 0;
     tape_t* pointed_element = NULL;
     tape_t* copy_tape_head = NULL;
@@ -278,49 +265,44 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(buffer, "run") == 0) {
 
-        while (feof(file) == 0) {          // until end of file is reached
+        while (fgets(read_buffer, READING_BUFFER_SIZE, file)) {          // until end of file is reached, read first string
 
-            if (fgets(read_buffer, READING_BUFFER_SIZE, file))      // read first string
-                clean_eol(read_buffer);
+            clean_eol(read_buffer);
 
-            copy_input_to_tape(read_buffer);         // copy the string input into tape memory
+            tape_head = copy_input_to_tape(read_buffer);         // copy the string input into tape memory
             tape_pointer = 0;
             enqueue(0, tape_head, tape_pointer, 0);        // enqueue initial condition
 
-            printf("\n");                   // DELETE
-            print_queue();                  // DELETE
-            print_tape(tape_head, tape_pointer);                   // DELETE
+            //printf("\n");                   // DELETE
+            //print_queue();                  // DELETE
+            //print_tape(tape_head, tape_pointer);                   // DELETE
 
             // perform a BFS
-            while (front) {             // until there's at least one element in the queue
+            while (front && ret != '1' && ret != 'U') {             // until there's at least one element in the queue
 
                 queue_elem = dequeue();         // pull from queue
 
-                printf("\nDequeue\n");             // DELETE
-                move_count = queue_elem->move_count;        // DELETE
+                //printf("\nDequeue\n");             // DELETE
 
-                if (queue_elem->move_count == max_transitions) {     // if reached maximum number of moves, return U
+                if (queue_elem->move_count == max_transitions)     // if reached maximum number of moves, return U
                     ret = 'U';
-                    break;
-                }
+
                 else {
                     move = find_array_element(&pre, queue_elem->current_state);      // if not, get the first transition with the current state taken from the queue
 
-                    while (move) {                                      // iterate over all moves
+                    while (move && ret != '1') {                                      // iterate over all moves
 
                         pointed_element = find_tape_element(queue_elem->copy_tape_head, queue_elem->copy_tape_pointer);
 
-                        printf("read char of move: %s\n", &move->read_char);                // DELETE
-                        printf("character of tape: %s\n", &pointed_element->character);     // DELETE
-                        print_tape(queue_elem->copy_tape_head, queue_elem->copy_tape_pointer);      // DELETE
-                        printf("current state: %d\n", queue_elem->current_state);             // DELETE
+                        //printf("read char of move: %s\n", &move->read_char);                // DELETE
+                        //printf("character of tape: %s\n", &pointed_element->character);     // DELETE
+                        //print_tape(queue_elem->copy_tape_head, queue_elem->copy_tape_pointer);      // DELETE
+                        //printf("current state: %d\n", queue_elem->current_state);             // DELETE
 
-                        if (strcmp(&move->read_char, "_") == 0 || strcmp(&move->read_char, &pointed_element->character) == 0) {     // if it's a possible move
+                        if (move->read_char == pointed_element->character) {     // if it's a possible move
 
-                            if (find_acceptance(move->end_state) == 1) {
+                            if (find_acceptance(move->end_state) == 1)
                                 ret = '1';
-                                break;
-                            }
 
                             copy_tape_head = copy_tape(queue_elem->copy_tape_head);       // duplicates actual memory tape and pointer
                             pointed_element = find_tape_element(copy_tape_head, queue_elem->copy_tape_pointer);
@@ -328,20 +310,15 @@ int main(int argc, char *argv[]) {
 
                             tape_pointer = move_pointer(queue_elem->copy_tape_pointer, move->head_movement, &copy_tape_head);               // move the pointer
 
-                            printf("next state: %d\n", move->end_state);        // DELETE
-                            print_tape(copy_tape_head, tape_pointer);           // DELETE
+                            //printf("next state: %d\n", move->end_state);        // DELETE
+                            //print_tape(copy_tape_head, tape_pointer);           // DELETE
 
                             enqueue(move->end_state, copy_tape_head, tape_pointer, queue_elem->move_count+1);
-                            printf("Enqueueing\n\n");                       // DELETE
-
-                            last_state_queued = move->end_state;            // DELETE
+                            //printf("Enqueueing\n\n");                       // DELETE
                         }
 
                         move = move->next_state;
                     }
-
-                    if (strcmp(&ret, "1") == 0)
-                        break;
 
                     free(queue_elem);
                 }
@@ -468,7 +445,7 @@ void set_transition() {
         clean_eol(tr);
 
     while (strcmp(tr, "acc") != 0) {        // until acc is found, read a line
-        next = (transition_t*) malloc(sizeof(transition_t));    // allocate a new transition
+        next = (transition_t*) calloc(1, sizeof(transition_t));    // allocate a new transition
 
         remove_spaces(tr);
         insert_separator(tr);
@@ -510,7 +487,7 @@ void set_acceptance_states() {
         clean_eol(acc);
 
     while (strcmp(acc, "max") != 0) {        // until max is found, read a line
-        next = (state_t*) malloc(sizeof(state_t));
+        next = (state_t*) calloc(1, sizeof(state_t));
         next->state_number = strtol(acc, &ptr, 10);
 
         next->next = acceptance_head;       // insertion in the head
@@ -541,31 +518,33 @@ int find_acceptance(int current_state) {
 /**
 * Writes down the input in the memory tape list
 */
-void copy_input_to_tape(char buffer[]) {
+tape_t* copy_input_to_tape(char buffer[]) {
 
     int i = 0;
     tape_t* prev = NULL;
     tape_t* tmp = NULL;
+    tape_t* ret = NULL;
+
 
     while (buffer[i] != '\0') {
-        printf("%c", buffer[i]);        // DELETE
-        fflush(stdout);                 // DELETE
-
-        tmp = (tape_t*) malloc(sizeof(tape_t));
+        tmp = (tape_t*) calloc(1, sizeof(tape_t));
         tmp->character = buffer[i];
         tmp->position = i;
 
         tmp->next = NULL;
         tmp->prev = prev;
 
-        if (!tape_head)
-            tape_head = tmp;
+        if (!ret)
+            ret = tmp;
+
         else
             prev->next = tmp;
 
         prev = tmp;
         i++;
     }
+
+    return ret;
 }
 
 /**
@@ -596,8 +575,8 @@ int move_pointer(int tape_pointer, char head_movement, tape_t* *head) {
 
     if (strcmp(&upper_case, "R") == 0) {
         if (!found->next) {
-            tmp = (tape_t*) malloc(sizeof(tape_t));
-            tmp->character = '\0';
+            tmp = (tape_t*) calloc(1, sizeof(tape_t));
+            tmp->character = '_';
             tmp->position = tape_pointer+1;
 
             tmp->next = NULL;
@@ -608,8 +587,8 @@ int move_pointer(int tape_pointer, char head_movement, tape_t* *head) {
     }
     else if (strcmp(&upper_case, "L") == 0) {
         if (!found->prev) {
-            tmp = (tape_t*) malloc(sizeof(tape_t));
-            tmp->character = '\0';
+            tmp = (tape_t*) calloc(1, sizeof(tape_t));
+            tmp->character = '_';
             tmp->position = tape_pointer-1;
 
             tmp->prev = NULL;
@@ -651,7 +630,7 @@ tape_t* copy_tape(tape_t* original_head) {
     tape_t* head_copy = NULL;
 
     while (current) {
-        tmp = (tape_t*) malloc(sizeof(tape_t));
+        tmp = (tape_t*) calloc(1, sizeof(tape_t));
         tmp->character = current->character;
         tmp->position = current->position;
 
@@ -675,7 +654,7 @@ tape_t* copy_tape(tape_t* original_head) {
 */
 void enqueue(int current_state, tape_t* copy_tape_head, int copy_tape_pointer, int move_count) {
 
-    queue_t* tmp = (queue_t*) malloc(sizeof(queue_t));
+    queue_t* tmp = (queue_t*) calloc(1, sizeof(queue_t));
 	tmp->current_state = current_state;
 	tmp->copy_tape_head = copy_tape_head;
 	tmp->copy_tape_pointer = copy_tape_pointer;
@@ -714,5 +693,7 @@ void clean_queue() {
     while (front)
         free(dequeue());
 }
+
+
 
 
