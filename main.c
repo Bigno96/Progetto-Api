@@ -4,7 +4,7 @@
 
 #define BUFFER_SIZE 150+1
 #define TRANSITION_SIZE 500+1
-#define READING_BUFFER_SIZE 20000+1
+#define READING_BUFFER_SIZE 30000+1
 
 /**
 * node for TM graph
@@ -59,8 +59,6 @@ typedef struct queue {
     struct queue* next;
 
 } queue_t;
-
-const char SEPARATOR = '$';
 
 /**
 * Replaces eol with null in the passed string
@@ -243,8 +241,8 @@ int main(int argc, char *argv[]) {
     transition_t* move = NULL;
     transition_t* pre = NULL;
 
-    char buffer[BUFFER_SIZE] = {0};
-    char read_buffer[READING_BUFFER_SIZE] = {0};
+    char buffer[BUFFER_SIZE] = {"\0"};
+    char read_buffer[READING_BUFFER_SIZE] = {"\0"};
 
     char ret = '0';
 
@@ -380,17 +378,17 @@ void insert_separator(char *str) {
     while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
          str[count++] = tmp[pointer++];
 
-    str[count++] = SEPARATOR;
+    str[count++] = '$';
 
     while (tmp[pointer] < 48 || tmp[pointer] > 57) {        // add separator
         str[count++] = tmp[pointer++];
-        str[count++] = SEPARATOR;
+        str[count++] = '$';
     }
 
     while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
          str[count++] = tmp[pointer++];
 
-     str[count++] = SEPARATOR;
+     str[count++] = '$';
 }
 
 /**
@@ -443,9 +441,7 @@ void add_next_transition(transition_t* *tm_head, transition_t* next) {
 void set_transition(transition_t* *tm_head, state_t* *acceptance_head) {
 
     char tr[TRANSITION_SIZE] = {0};
-    char *token[5] = {0};
     transition_t* next;
-    int i = 0;
 
     if (fgets(tr, TRANSITION_SIZE, stdin))
         clean_eol(tr);
@@ -456,16 +452,11 @@ void set_transition(transition_t* *tm_head, state_t* *acceptance_head) {
         remove_spaces(tr);
         insert_separator(tr);
 
-        token[i] = strtok(tr, &SEPARATOR);       // locate first token
-        while (token[i])                            // locate all other token
-            token[++i] = strtok(NULL, &SEPARATOR);     // call with NULL implies the usage of the previous input
-        i = 0;
-
-        next->start_state = atoi(token[0]);
-        next->read_char = *token[1];
-        next->write_char = *token[2];
-        next->head_movement = *token[3];
-        next->end_state = atoi(token[4]);
+        next->start_state = atoi(strtok(tr, "$"));       // locate first token
+        next->read_char = *strtok(NULL, "$");        // call with NULL implies the usage of the previous input
+        next->write_char = *strtok(NULL, "$");
+        next->head_movement = *strtok(NULL, "$");
+        next->end_state = atoi(strtok(NULL, "$"));
 
         next->next_state = NULL;
         next->right_state = NULL;
