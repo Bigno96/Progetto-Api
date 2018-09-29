@@ -1,13 +1,10 @@
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <sys/time.h>
 
-#define BUFFER_SIZE 15+1
-#define TRANSITION_SIZE 50+1
-#define READING_BUFFER_SIZE 10000+1
+#define BUFFER_SIZE 150+1
+#define TRANSITION_SIZE 500+1
+#define READING_BUFFER_SIZE 20000+1
 
 /**
 * node for TM graph
@@ -63,15 +60,7 @@ typedef struct queue {
 
 } queue_t;
 
-transition_t* tm_head = NULL;
-tape_t* tape_head = NULL;
-state_t* acceptance_head = NULL;
-queue_t* front = NULL;
-queue_t* rear = NULL;
-
 const char SEPARATOR = '$';
-
-FILE * file = NULL;
 
 /**
 * Replaces eol with null in the passed string
@@ -93,28 +82,28 @@ void insert_separator(char *str);
 * Returns pointer to node searched, null if none
 * Pre is modified to point to previous element in the collection of list
 */
-transition_t* find_array_element(transition_t* *pre, int position);
+transition_t* find_array_element(transition_t* tm_head, transition_t* *pre, int position);
 
 /**
 * Inserts a new transition into the TM graph
 */
-void add_next_transition(transition_t* next);
+void add_next_transition(transition_t* *tm_head, transition_t* next);
 
 /**
 * Sets down all transitions
 */
-void set_transition();
+void set_transition(transition_t* *tm_head, state_t* *acceptance_head);
 
 /**
 * Sets the acceptance states list
 */
-void set_acceptance_states();
+void set_acceptance_states(state_t* *acceptance_head);
 
 /**
 * Finds if the passed state is in the acceptance list
 * Returns 1 if it is, 0 else
 */
-int find_acceptance(int current_state);
+int find_acceptance(state_t* acceptance_head, int current_state);
 
 /**
 * Writes down the input in the memory tape list
@@ -135,7 +124,7 @@ tape_t* find_tape_element(tape_t* head, int position);
 /**
 * Empties memory tape list, sets tape_head = NULL
 */
-void empty_tape();
+void empty_tape(tape_t* *tape_head);
 
 /**
 * Duplicates memory tape, returns new head
@@ -145,17 +134,27 @@ tape_t* copy_tape(tape_t* original_head);
 /**
 * Adds a new node to the queue
 */
-void enqueue(int current_state, tape_t* copy_tape_head, int copy_tape_pointer, int move_count);
+void enqueue(queue_t* *front, queue_t* *rear, int current_state, tape_t* copy_tape_head, int copy_tape_pointer, int move_count);
 
 /**
 * Returns front element of the queue
 */
-queue_t* dequeue();
+queue_t* dequeue(queue_t* *front, queue_t* *rear);
 
 /**
 * Cleans the queue
 */
-void clean_queue();
+void clean_queue(queue_t* *front, queue_t* *rear);
+
+/**
+* Clean tm graph
+*/
+void clean_tm(transition_t* *tm_head);
+
+/**
+* Clean acceptance states
+*/
+void clean_acceptance_states(state_t* *acceptance_head);
 
 // DELETE
 
@@ -188,7 +187,7 @@ void print_transition(transition_t* tr) {
 /**
 * Prints out TM transitions graph
 */
-void print_TM() {
+void print_TM(transition_t* tm_head) {
 
     transition_t* tmp = tm_head;
     transition_t* next = NULL;
@@ -212,7 +211,7 @@ void print_TM() {
 /**
 * Prints out queue
 */
-void print_queue() {
+void print_queue(queue_t* front) {
 
     queue_t* tmp = front;
 
@@ -228,10 +227,13 @@ void print_queue() {
 
 int main(int argc, char *argv[]) {
 
-    file = fopen("Test/IncreasingStuff.txt", "r");
+    transition_t* tm_head = NULL;
+    tape_t* tape_head = NULL;
+    state_t* acceptance_head = NULL;
+    queue_t* front = NULL;
+    queue_t* rear = NULL;
 
     int max_transitions = 0;
-    char *ptr;
 
     int tape_pointer = 0;
     tape_t* pointed_element = NULL;
@@ -241,46 +243,46 @@ int main(int argc, char *argv[]) {
     transition_t* move = NULL;
     transition_t* pre = NULL;
 
-    char buffer[BUFFER_SIZE];
-    char read_buffer[READING_BUFFER_SIZE];
+    char buffer[BUFFER_SIZE] = {0};
+    char read_buffer[READING_BUFFER_SIZE] = {0};
 
     char ret = '0';
 
     /** reading "tr" */
-    if (fgets(buffer, BUFFER_SIZE, file))
+    if (fgets(buffer, BUFFER_SIZE, stdin))
         clean_eol(buffer);
 
     if (strcmp(buffer, "tr") == 0)
-        set_transition();
+        set_transition(&tm_head, &acceptance_head);
 
     /** here, already read the string "max" */
-    if (fgets(buffer, BUFFER_SIZE, file))
+    if (fgets(buffer, BUFFER_SIZE, stdin))
         clean_eol(buffer);
 
-    max_transitions = strtol(buffer, &ptr, 10);
+    max_transitions = atoi(buffer);
 
     /** reading "run" */
-    if (fgets(buffer, BUFFER_SIZE, file))
+    if (fgets(buffer, BUFFER_SIZE, stdin))
         clean_eol(buffer);
 
     if (strcmp(buffer, "run") == 0) {
 
-        while (fgets(read_buffer, READING_BUFFER_SIZE, file)) {          // until end of file is reached, read first string
+        while (fgets(read_buffer, READING_BUFFER_SIZE, stdin)) {          // until end of stdin is reached, read first string
 
             clean_eol(read_buffer);
 
             tape_head = copy_input_to_tape(read_buffer);         // copy the string input into tape memory
             tape_pointer = 0;
-            enqueue(0, tape_head, tape_pointer, 0);        // enqueue initial condition
+            enqueue(&front, &rear, 0, tape_head, tape_pointer, 0);        // enqueue initial condition
 
             //printf("\n");                   // DELETE
-            //print_queue();                  // DELETE
+            //print_queue(front);                  // DELETE
             //print_tape(tape_head, tape_pointer);                   // DELETE
 
             // perform a BFS
             while (front && ret != '1' && ret != 'U') {             // until there's at least one element in the queue
 
-                queue_elem = dequeue();         // pull from queue
+                queue_elem = dequeue(&front, &rear);         // pull from queue
 
                 //printf("\nDequeue\n");             // DELETE
 
@@ -288,7 +290,7 @@ int main(int argc, char *argv[]) {
                     ret = 'U';
 
                 else {
-                    move = find_array_element(&pre, queue_elem->current_state);      // if not, get the first transition with the current state taken from the queue
+                    move = find_array_element(tm_head, &pre, queue_elem->current_state);      // if not, get the first transition with the current state taken from the queue
 
                     while (move && ret != '1') {                                      // iterate over all moves
 
@@ -301,38 +303,43 @@ int main(int argc, char *argv[]) {
 
                         if (move->read_char == pointed_element->character) {     // if it's a possible move
 
-                            if (find_acceptance(move->end_state) == 1)
+                            if (find_acceptance(acceptance_head, move->end_state) == 1)
                                 ret = '1';
+                            else {
+                                copy_tape_head = copy_tape(queue_elem->copy_tape_head);       // duplicates actual memory tape and pointer
+                                pointed_element = find_tape_element(copy_tape_head, queue_elem->copy_tape_pointer);
+                                pointed_element->character = move->write_char;                  // set the character in the memory tape
 
-                            copy_tape_head = copy_tape(queue_elem->copy_tape_head);       // duplicates actual memory tape and pointer
-                            pointed_element = find_tape_element(copy_tape_head, queue_elem->copy_tape_pointer);
-                            pointed_element->character = move->write_char;                  // set the character in the memory tape
+                                tape_pointer = move_pointer(queue_elem->copy_tape_pointer, move->head_movement, &copy_tape_head);               // move the pointer
 
-                            tape_pointer = move_pointer(queue_elem->copy_tape_pointer, move->head_movement, &copy_tape_head);               // move the pointer
+                                //printf("next state: %d\n", move->end_state);        // DELETE
+                                //print_tape(copy_tape_head, tape_pointer);           // DELETE
 
-                            //printf("next state: %d\n", move->end_state);        // DELETE
-                            //print_tape(copy_tape_head, tape_pointer);           // DELETE
-
-                            enqueue(move->end_state, copy_tape_head, tape_pointer, queue_elem->move_count+1);
-                            //printf("Enqueueing\n\n");                       // DELETE
+                                enqueue(&front, &rear, move->end_state, copy_tape_head, tape_pointer, queue_elem->move_count+1);
+                                //printf("Enqueueing\n\n");                       // DELETE
+                            }
                         }
 
                         move = move->next_state;
                     }
 
+                    empty_tape(&queue_elem->copy_tape_head);
                     free(queue_elem);
                 }
             }
 
-            printf("%c\n", ret);
+            fputc(ret, stdout);
+            fputc('\n', stdout);
             fflush(stdout);
 
             ret = '0';
-            clean_queue();
-            empty_tape();
+            clean_queue(&front, &rear);
             tape_pointer = 0;
         }
     }
+
+    clean_tm(&tm_head);
+    clean_acceptance_states(&acceptance_head);
 
     return 0;
 }
@@ -341,9 +348,9 @@ int main(int argc, char *argv[]) {
 * Replaces eol with null in the passed string
 */
 void clean_eol(char *str) {
-    char *c = strchr(str, '\n');                // removes the EOL appended by fgets, if there's any
-    if (c)
-        *c = '\0';
+    size_t len = strlen(str);
+    if (len && (str[len-1] == '\n'))
+        str[len-1] = '\0';
 }
 
 /**
@@ -391,7 +398,7 @@ void insert_separator(char *str) {
 * Returns pointer to node searched, null if none
 * Pre is modified to point to previous element in the collection of list
 */
-transition_t* find_array_element(transition_t* *pre, int position) {
+transition_t* find_array_element(transition_t* tm_head, transition_t* *pre, int position) {
 
     transition_t* ret = tm_head;           // return is pointed to head at first
 
@@ -406,18 +413,18 @@ transition_t* find_array_element(transition_t* *pre, int position) {
 /**
 * Inserts a new transition into the TM graph
 */
-void add_next_transition(transition_t* next) {
+void add_next_transition(transition_t* *tm_head, transition_t* next) {
 
     transition_t* pre = NULL;
-    transition_t* found_state = find_array_element(&pre, next->start_state);       // find state position based on start_state
+    transition_t* found_state = find_array_element(*tm_head, &pre, next->start_state);       // find state position based on start_state
 
     if (!found_state && !pre)       // if no elements, next is the head
-        tm_head = next;
+        *tm_head = next;
     else if (found_state && !pre) {    // if first position, set him has next state
         next->next_state = found_state;
         next->right_state = found_state->right_state;
         found_state->right_state = NULL;
-        tm_head = next;
+        *tm_head = next;
     }
     else if (!found_state && pre) {      // if no state, but pre exists, next is set as right element of pre
         pre->right_state = next;
@@ -433,19 +440,18 @@ void add_next_transition(transition_t* next) {
 /**
 * Sets down all transitions
 */
-void set_transition() {
+void set_transition(transition_t* *tm_head, state_t* *acceptance_head) {
 
-    char tr[TRANSITION_SIZE] = "\0";
-    char *ptr;
-    char *token[5];
+    char tr[TRANSITION_SIZE] = {0};
+    char *token[5] = {0};
     transition_t* next;
     int i = 0;
 
-    if (fgets(tr, TRANSITION_SIZE, file))
+    if (fgets(tr, TRANSITION_SIZE, stdin))
         clean_eol(tr);
 
     while (strcmp(tr, "acc") != 0) {        // until acc is found, read a line
-        next = (transition_t*) calloc(1, sizeof(transition_t));    // allocate a new transition
+        next = calloc(1, sizeof(transition_t));    // allocate a new transition
 
         remove_spaces(tr);
         insert_separator(tr);
@@ -455,45 +461,44 @@ void set_transition() {
             token[++i] = strtok(NULL, &SEPARATOR);     // call with NULL implies the usage of the previous input
         i = 0;
 
-        next->start_state = strtol(token[0], &ptr, 10);
+        next->start_state = atoi(token[0]);
         next->read_char = *token[1];
         next->write_char = *token[2];
         next->head_movement = *token[3];
-        next->end_state = strtol(token[4], &ptr, 10);
+        next->end_state = atoi(token[4]);
 
         next->next_state = NULL;
         next->right_state = NULL;
 
-        add_next_transition(next);     // set transition in the list
+        add_next_transition(tm_head, next);     // set transition in the list
 
-        if (fgets(tr, TRANSITION_SIZE, file))
+        if (fgets(tr, TRANSITION_SIZE, stdin))
             clean_eol(tr);
     }
 
     // here, "acc" is read
-    set_acceptance_states();
+    set_acceptance_states(acceptance_head);
 }
 
 /**
 * Sets the acceptance states list
 */
-void set_acceptance_states() {
+void set_acceptance_states(state_t* *acceptance_head) {
 
     char acc[BUFFER_SIZE] = "\0";
-    char *ptr;
     state_t* next;
 
-    if (fgets(acc, BUFFER_SIZE, file))
+    if (fgets(acc, BUFFER_SIZE, stdin))
         clean_eol(acc);
 
     while (strcmp(acc, "max") != 0) {        // until max is found, read a line
-        next = (state_t*) calloc(1, sizeof(state_t));
-        next->state_number = strtol(acc, &ptr, 10);
+        next = calloc(1, sizeof(state_t));
+        next->state_number = atoi(acc);
 
-        next->next = acceptance_head;       // insertion in the head
-        acceptance_head = next;
+        next->next = *acceptance_head;       // insertion in the head
+        *acceptance_head = next;
 
-        if (fgets(acc, BUFFER_SIZE, file))
+        if (fgets(acc, BUFFER_SIZE, stdin))
             clean_eol(acc);
     }
 }
@@ -502,7 +507,7 @@ void set_acceptance_states() {
 * Finds if the passed state is in the acceptance list
 * Returns 1 if it is, 0 else
 */
-int find_acceptance(int current_state) {
+int find_acceptance(state_t* acceptance_head, int current_state) {
 
     state_t* find = acceptance_head;
 
@@ -527,7 +532,7 @@ tape_t* copy_input_to_tape(char buffer[]) {
 
 
     while (buffer[i] != '\0') {
-        tmp = (tape_t*) calloc(1, sizeof(tape_t));
+        tmp = calloc(1, sizeof(tape_t));
         tmp->character = buffer[i];
         tmp->position = i;
 
@@ -536,7 +541,6 @@ tape_t* copy_input_to_tape(char buffer[]) {
 
         if (!ret)
             ret = tmp;
-
         else
             prev->next = tmp;
 
@@ -569,13 +573,12 @@ tape_t* find_tape_element(tape_t* head, int position) {
 */
 int move_pointer(int tape_pointer, char head_movement, tape_t* *head) {
 
-    char upper_case = toupper(head_movement);
     tape_t* tmp = NULL;
     tape_t* found = find_tape_element(*head, tape_pointer);
 
-    if (strcmp(&upper_case, "R") == 0) {
+    if (head_movement == 'R') {
         if (!found->next) {
-            tmp = (tape_t*) calloc(1, sizeof(tape_t));
+            tmp = calloc(1, sizeof(tape_t));
             tmp->character = '_';
             tmp->position = tape_pointer+1;
 
@@ -585,9 +588,9 @@ int move_pointer(int tape_pointer, char head_movement, tape_t* *head) {
         }
         tape_pointer++;
     }
-    else if (strcmp(&upper_case, "L") == 0) {
+    else if (head_movement == 'L') {
         if (!found->prev) {
-            tmp = (tape_t*) calloc(1, sizeof(tape_t));
+            tmp = calloc(1, sizeof(tape_t));
             tmp->character = '_';
             tmp->position = tape_pointer-1;
 
@@ -605,9 +608,9 @@ int move_pointer(int tape_pointer, char head_movement, tape_t* *head) {
 /**
 * Empties memory tape list, sets tape_head = NULL
 */
-void empty_tape() {
+void empty_tape(tape_t* *tape_head) {
 
-    tape_t* current = tape_head;
+    tape_t* current = *tape_head;
     tape_t* next = NULL;
 
     while (current) {
@@ -616,7 +619,7 @@ void empty_tape() {
         current = next;
     }
 
-    tape_head = NULL;
+    *tape_head = NULL;
 }
 
 /**
@@ -624,37 +627,40 @@ void empty_tape() {
 */
 tape_t* copy_tape(tape_t* original_head) {
 
-    tape_t* current = original_head;
-    tape_t* tmp = NULL;
+    if (!original_head)      // null list
+        return NULL;
+
+    tape_t* new_head = calloc(1, sizeof(tape_t));       // original_hea head
+    new_head->character = original_head->character;
+    new_head->position = original_head->position;
+    new_head->prev = NULL;
+
+    tape_t* tmp = new_head;
     tape_t* prev = NULL;
-    tape_t* head_copy = NULL;
 
-    while (current) {
-        tmp = (tape_t*) calloc(1, sizeof(tape_t));
-        tmp->character = current->character;
-        tmp->position = current->position;
+    original_head = original_head->next;
+    while (original_head) {
+        tmp->next = calloc(1, sizeof(tape_t));
+        prev = tmp;
+        tmp = tmp->next;
 
-        tmp->next = NULL;
+        tmp->character = original_head->character;
+        tmp->position = original_head->position;
         tmp->prev = prev;
 
-        if (!head_copy)
-            head_copy = tmp;
-        else
-            prev->next = tmp;
-
-        prev = tmp;
-        current = current->next;
+        original_head = original_head->next;
     }
+    tmp->next = NULL;
 
-    return head_copy;
+    return new_head;
 }
 
 /**
 * Adds a new node to the queue
 */
-void enqueue(int current_state, tape_t* copy_tape_head, int copy_tape_pointer, int move_count) {
+void enqueue(queue_t* *front, queue_t* *rear, int current_state, tape_t* copy_tape_head, int copy_tape_pointer, int move_count) {
 
-    queue_t* tmp = (queue_t*) calloc(1, sizeof(queue_t));
+    queue_t* tmp = calloc(1, sizeof(queue_t));
 	tmp->current_state = current_state;
 	tmp->copy_tape_head = copy_tape_head;
 	tmp->copy_tape_pointer = copy_tape_pointer;
@@ -662,25 +668,25 @@ void enqueue(int current_state, tape_t* copy_tape_head, int copy_tape_pointer, i
 
 	tmp->next = NULL;
 
-	if(!front && !rear)
-		front = rear = tmp;
+	if(!(*front) && !(*rear))
+		*front = *rear = tmp;
     else {
-        rear->next = tmp;
-        rear = tmp;
+        (*rear)->next = tmp;
+        *rear = tmp;
     }
 }
 
 /**
 * Returns front element of the queue
 */
-queue_t* dequeue() {
+queue_t* dequeue(queue_t* *front, queue_t* *rear) {
 
-	queue_t* tmp = front;
+	queue_t* tmp = *front;
 
-	if (front == rear)
-		front = rear = NULL;
+	if (*front == *rear)
+		*front = *rear = NULL;
 	else
-		front = front->next;
+		*front = (*front)->next;
 
 	return(tmp);
 }
@@ -688,12 +694,50 @@ queue_t* dequeue() {
 /**
 * Cleans the queue
 */
-void clean_queue() {
+void clean_queue(queue_t* *front, queue_t* *rear) {
 
-    while (front)
-        free(dequeue());
+    queue_t* tmp = NULL;
+
+    while (*front) {
+        tmp = dequeue(front, rear);
+        empty_tape(&tmp->copy_tape_head);
+        free(tmp);
+    }
 }
 
+/**
+* Clean tm graph
+*/
+void clean_tm(transition_t* *tm_head) {
 
+    transition_t* current = *tm_head;
+    transition_t* next = NULL;
+    transition_t* right = NULL;
 
+    while (current) {
+        right = current->right_state;
+        while(current) {
+            next = current->next_state;
+            free(current);
+            current = next;
+        }
+        current = right;
+    }
+    *tm_head = NULL;
+}
 
+/**
+* Clean acceptance states
+*/
+void clean_acceptance_states(state_t* *acceptance_head) {
+
+    state_t* current = *acceptance_head;
+    state_t* next = NULL;
+
+    while (current) {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+    *acceptance_head = NULL;
+}
