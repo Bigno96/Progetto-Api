@@ -52,16 +52,6 @@ typedef struct queue {
 void clean_eol(char *str);
 
 /**
-* Removes all spaces from a given string
-*/
-void remove_spaces(char *str);
-
-/**
-* Inserts '$' separator between element of passed transition
-*/
-void insert_separator(char *str);
-
-/**
 * Finds if the passed state is in the acceptance list
 * Returns 1 if it is, 0 else
 */
@@ -96,16 +86,6 @@ queue_t* dequeue(queue_t* *front, queue_t* *rear);
 * Cleans the queue
 */
 void clean_queue(queue_t* *front, queue_t* *rear);
-
-/**
-* Clean tm graph
-*/
-void clean_tm(transition_t* *transition_list, int size);
-
-/**
-* Clean acceptance states
-*/
-void clean_acceptance_states(state_t* *acceptance_head);
 
 // DELETE
 
@@ -207,14 +187,11 @@ int main(int argc, char *argv[]) {
         while (strcmp(tr, "acc") != 0) {        // until acc is found, read a line
             next_tr = calloc(1, sizeof(transition_t));    // allocate a new transition
 
-            remove_spaces(tr);
-            insert_separator(tr);
-
-            next_tr->start_state = atoi(strtok(tr, "$"));       // locate first token
-            next_tr->read_char = *strtok(NULL, "$");        // call with NULL implies the usage of the previous input
-            next_tr->write_char = *strtok(NULL, "$");
-            next_tr->head_movement = *strtok(NULL, "$");
-            next_tr->end_state = atoi(strtok(NULL, "$"));
+            next_tr->start_state = atoi(strtok(tr, " "));       // locate first token
+            next_tr->read_char = *strtok(NULL, " ");        // call with NULL implies the usage of the previous input
+            next_tr->write_char = *strtok(NULL, " ");
+            next_tr->head_movement = *strtok(NULL, " ");
+            next_tr->end_state = atoi(strtok(NULL, " "));
 
             if (next_tr->start_state+1 > size)
                 size = next_tr->start_state+1;
@@ -318,9 +295,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    clean_tm(transition_list, size);
-    clean_acceptance_states(&acceptance_head);
-
     return 0;
 }
 
@@ -331,46 +305,6 @@ void clean_eol(char *str) {
     size_t len = strlen(str);
     if (len && str[len-1] == '\n')
         str[len-1] = '\0';
-}
-
-/**
-* Removes all spaces from a given string
-*/
-void remove_spaces(char *str) {
-
-    int count = 0, i = 0;
-
-    for (i = 0; str[i]; i++)
-        if (str[i] != ' ')
-            str[count++] = str[i];          // counts all non-space chars, puts them near each other
-
-    str[count] = '\0';                      // appends null after all the non-space chars
-}
-
-/**
-* Inserts '$' separator between element of passed transition
-*/
-void insert_separator(char *str) {
-
-    int pointer = 0, count = 0;
-    char tmp[TRANSITION_SIZE] = "\0";
-
-    strncpy(tmp, str, TRANSITION_SIZE);
-
-    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
-         str[count++] = tmp[pointer++];
-
-    str[count++] = '$';
-
-    while (tmp[pointer] < 48 || tmp[pointer] > 57) {        // add separator
-        str[count++] = tmp[pointer++];
-        str[count++] = '$';
-    }
-
-    while (tmp[pointer] <= 57 && tmp[pointer] >= 48)      // if char is a number
-         str[count++] = tmp[pointer++];
-
-     str[count++] = '$';
 }
 
 /**
@@ -395,10 +329,11 @@ int find_acceptance(state_t* acceptance_head, int current_state) {
 */
 int move_pointer(int tape_pointer, char head_movement, char* *tape) {
 
-    size_t len = strlen(*tape);
+    size_t len = 0;
     char* tmp = NULL;
 
     if (head_movement == 'R') {
+        len = strlen(*tape);
         if (tape_pointer == len-1) {
             *tape = realloc(*tape, (len+2) * sizeof(char));          // strlen does not count the '\0' which I want to keep
             strcat(*tape, "_\0");
@@ -407,6 +342,7 @@ int move_pointer(int tape_pointer, char head_movement, char* *tape) {
     }
     else if (head_movement == 'L') {
         if (tape_pointer == 0) {
+            len = strlen(*tape);
             tmp = *tape;
             *tape = calloc(len+2, sizeof(char));          // strlen does not count the '\0' which I want to keep
             *tape[0] = '_';
@@ -491,44 +427,3 @@ void clean_queue(queue_t* *front, queue_t* *rear) {
         free(tmp);
     }
 }
-
-/**
-* Clean tm graph
-*/
-void clean_tm(transition_t* *transition_list, int size) {
-
-    int i = 0;
-    transition_t* next = NULL;
-    transition_t* current = NULL;
-
-    for (i = 0; i < size; i++)
-        if (transition_list[i]) {
-            current = transition_list[i];
-            while (current) {
-                next = current->next_state;
-                free(current);
-                current = next;
-            }
-        }
-        else
-            free(transition_list[i]);
-
-    free(transition_list);
-}
-
-/**
-* Clean acceptance states
-*/
-void clean_acceptance_states(state_t* *acceptance_head) {
-
-    state_t* current = *acceptance_head;
-    state_t* next = NULL;
-
-    while (current) {
-        next = current->next;
-        free(current);
-        current = next;
-    }
-    *acceptance_head = NULL;
-}
-
