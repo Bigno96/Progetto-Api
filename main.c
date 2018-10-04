@@ -2,9 +2,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define BUFFER_SIZE 150+1
+#define BUFFER_SIZE 100+1
 #define TRANSITION_SIZE 500+1
-#define READING_BUFFER_SIZE 30000+1
+#define READING_BUFFER_SIZE 20000+1
 
 /**
 * node for TM graph
