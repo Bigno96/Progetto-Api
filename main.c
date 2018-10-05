@@ -17,20 +17,11 @@ typedef struct transition {
     int end_state;
     char head_movement;
 
+    int acceptance;
+
     struct transition* next_state;          // next state on the list of member i
 
 } transition_t;
-
-/**
-* node for the acceptance list
-*/
-typedef struct state {
-
-    int state_number;
-
-    struct state* next;
-
-} state_t;
 
 /**
 * node for the queue
@@ -52,10 +43,9 @@ typedef struct queue {
 void clean_eol(char *str);
 
 /**
-* Finds if the passed state is in the acceptance list
-* Returns 1 if it is, 0 else
+* Returns max of 2 int
 */
-int find_acceptance(state_t* acceptance_head, int current_state);
+int max(int a, int b);
 
 /**
 * Moves tape pointer, returns new value of it
@@ -126,7 +116,7 @@ void print_TM(transition_t* *transition_list, int size) {
 
     printf("\n");
     for (i = 0; i<size; i++)
-        if (transition_list[i])
+        if (transition_list[i]->start_state != -1)
             print_transition(transition_list[i]);
     printf("-------------\n");
 }
@@ -150,16 +140,15 @@ void print_queue(queue_t* front) {
 
 int main(int argc, char *argv[]) {
 
-    //FILE *file = fopen("Test/IncreasingStuff.txt", "r");
+    //FILE *file = fopen("Test/FancyLoops.txt", "r");
 
     int max_size = 2000, size = 0;
-    transition_t* *transition_list = calloc(max_size, sizeof(transition_t));
+    int i = 0;
+    transition_t* *transition_list = calloc(max_size, sizeof(transition_t*));
 
-    state_t* acceptance_head = NULL;
     queue_t* front = NULL;
     queue_t* rear = NULL;
 
-    state_t* next_state = NULL;
     transition_t* next_tr = NULL;
     int max_transitions = 0;
 
@@ -193,12 +182,14 @@ int main(int argc, char *argv[]) {
             next_tr->head_movement = *strtok(NULL, " ");
             next_tr->end_state = atoi(strtok(NULL, " "));
 
-            if (next_tr->start_state+1 > size)
-                size = next_tr->start_state+1;
+            next_tr->acceptance = 0;
+
+            if (max(next_tr->start_state+1, next_tr->end_state+1) > size)
+                size = max(next_tr->start_state+1, next_tr->end_state+1);
 
             if (size > (max_size)) {                        // if start state is bigger than the size
                 max_size = 2*max_size;
-                transition_list = realloc(transition_list, (max_size) * sizeof(transition_t));      // realloc with the new doubled size
+                transition_list = realloc(transition_list, (max_size) * sizeof(transition_t*));      // realloc with the new doubled size
             }
 
             if (transition_list[next_tr->start_state])                   // if not first state with this number, set as head of the list
@@ -211,7 +202,7 @@ int main(int argc, char *argv[]) {
             if (fgets(tr, TRANSITION_SIZE, stdin))
                 clean_eol(tr);
         }
-        transition_list = realloc(transition_list, size * sizeof(transition_t));
+        transition_list = realloc(transition_list, size * sizeof(transition_t*));
     }
 
     /** here, "acc" is already read */
@@ -220,16 +211,25 @@ int main(int argc, char *argv[]) {
 
         /** setting acceptance states */
         while (strcmp(buffer, "max") != 0) {        // until max is found, read a line
-            next_state = calloc(1, sizeof(state_t));
-            next_state->state_number = atoi(buffer);
-
-            next_state->next = acceptance_head;       // insertion in the head
-            acceptance_head = next_state;
+            next_tr = calloc(1, sizeof(transition_t));
+            next_tr->start_state = -1;          // sentinel value, no transitions for this state
+            next_tr->next_state = NULL;           // pointer safety
+            next_tr->acceptance = 1;
+            transition_list[atoi(buffer)] = next_tr;
 
             if (fgets(buffer, BUFFER_SIZE, stdin))
                 clean_eol(buffer);
         }
     }
+
+    for (i = 0; i < size; i++)            // fills empty states on transition_list
+        if (!transition_list[i]) {
+            next_tr = calloc(1, sizeof(transition_t));
+            next_tr->start_state = -1;      // sentinel value, no transitions for this state
+            next_tr->next_state = NULL;           // pointer safety
+            next_tr->acceptance = 0;
+            transition_list[i] = next_tr;
+        }
 
     /** here, "max" is already read */
     if (fgets(buffer, BUFFER_SIZE, stdin)) {
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
 
                         if (move->read_char == queue_elem->copy_tape[queue_elem->copy_tape_pointer]) {     // if it's a possible move
 
-                            if (find_acceptance(acceptance_head, move->end_state) == 1)
+                            if (transition_list[move->end_state]->acceptance == 1)
                                 ret = '1';
                             else {
                                 tape = copy_tape(queue_elem->copy_tape);                            // duplicates actual memory tape
@@ -308,20 +308,12 @@ void clean_eol(char *str) {
 }
 
 /**
-* Finds if the passed state is in the acceptance list
-* Returns 1 if it is, 0 else
+* Returns max of 2 int
 */
-int find_acceptance(state_t* acceptance_head, int current_state) {
-
-    state_t* find = acceptance_head;
-
-    while (find) {
-        if (find->state_number == current_state)
-            return 1;
-        find = find->next;
-    }
-
-    return 0;
+int max(int a, int b) {
+    if (a >= b)
+        return a;
+    return b;
 }
 
 /**
