@@ -6,6 +6,9 @@
 #define TRANSITION_SIZE 500+1
 #define READING_BUFFER_SIZE 20000+1
 
+#define INITIAL_GRAPH_SIZE 2000
+#define CHUNK_SIZE 500
+
 /**
 * node for TM graph
 */
@@ -24,13 +27,27 @@ typedef struct transition {
 } transition_t;
 
 /**
+* node for the tape
+*/
+typedef struct tape {
+
+    int offset;
+    char chunk[CHUNK_SIZE];
+
+    struct tape* next;
+    struct tape* prev;
+
+} tape_t;
+
+/**
 * node for the queue
 */
 typedef struct queue {
 
     int current_state;
-    char* copy_tape;
-    int copy_tape_pointer;
+    tape_t* copy_tape_head;
+    int copy_string_pointer;
+    int copy_tape_offset;
     int move_count;
 
     struct queue* next;
@@ -48,24 +65,39 @@ void clean_eol(char *str);
 int max(int a, int b);
 
 /**
+* Copies given buffer into a memory tape, returns head of the tape
+*/
+tape_t* copy_buffer_to_tape(char buffer[]);
+
+/**
+* Finds char pointed in the memory tape
+*/
+char find_pointed_char(tape_t* head, int string_pointer, int tape_offset);
+
+/**
+* Sets new char in the memory tape
+*/
+void write_char(tape_t* head, char write_char, int string_pointer, int tape_offset);
+
+/**
 * Moves tape pointer, returns new value of it
 */
-int move_pointer(int tape_pointer, char head_movement, char* *tape);
+tape_t* move_pointer(tape_t* head, int* string_pointer, int* tape_offset, char head_movement);
 
 /**
 * Empties memory tape list, sets tape_head = NULL
 */
-void empty_tape(char* *tape);
+void empty_tape(tape_t* head);
 
 /**
 * Duplicates memory tape, returns new head
 */
-char* copy_tape(char* original_list);
+tape_t* copy_tape(tape_t* original_head);
 
 /**
 * Adds a new node to the queue
 */
-void enqueue(queue_t* *front, queue_t* *rear, int current_state, char* copy_tape, int copy_tape_pointer, int move_count);
+void enqueue(queue_t* *front, queue_t* *rear, int current_state, tape_t* copy_tape_head, int copy_string_pointer, int copy_tape_offset, int move_count);
 
 /**
 * Returns front element of the queue
@@ -82,15 +114,22 @@ void clean_queue(queue_t* *front, queue_t* *rear);
 /**
 * Prints out memory tape with pointer highlighted
 */
-void print_tape(char* tape, int pointer) {
+void print_tape(tape_t* head, int string_pointer, int tape_offset) {
 
+    tape_t* curr = head;
     int i = 0;
 
-    for (i = 0; tape[i] != '\0'; i++)
-        if (i == pointer)
-            printf("|%c| ", tape[i]);
+    while (curr) {
+        if (curr->offset == tape_offset)
+            for (i = 0; i < CHUNK_SIZE; i++)
+                if (i == string_pointer)
+                    printf("|%c|", curr->chunk[i]);
+                else
+                    printf("%c", curr->chunk[i]);
         else
-            printf("%c ", tape[i]);
+            printf("%s", curr->chunk);
+        curr = curr->next;
+    }
     printf("\n");
 }
 
@@ -140,9 +179,9 @@ void print_queue(queue_t* front) {
 
 int main(int argc, char *argv[]) {
 
-    //FILE *file = fopen("Test/FancyLoops.txt", "r");
+    //FILE *file = fopen("Test/IncreasingStuff.txt", "r");
 
-    int max_size = 2000, size = 0;
+    int max_size = INITIAL_GRAPH_SIZE, size = 0;
     int i = 0;
     transition_t* *transition_list = calloc(max_size, sizeof(transition_t*));
 
@@ -152,8 +191,9 @@ int main(int argc, char *argv[]) {
     transition_t* next_tr = NULL;
     int max_transitions = 0;
 
-    int tape_pointer = 0;
-    char* tape = NULL;
+    int string_pointer = 0, tape_offset = 0;
+    tape_t* tape_head = NULL;
+    char pointed_char = '\0';
 
     queue_t* queue_elem = NULL;
     transition_t* move = NULL;
@@ -249,13 +289,19 @@ int main(int argc, char *argv[]) {
 
             clean_eol(read_buffer);
 
-            tape = copy_tape(read_buffer);         // copy the string input into tape memory
-            enqueue(&front, &rear, 0, tape, tape_pointer, 0);        // enqueue initial condition
+            tape_head = copy_buffer_to_tape(read_buffer);         // copy the string input into tape memory
+            enqueue(&front, &rear, 0, tape_head, string_pointer, tape_offset, 0);        // enqueue initial condition
 
             // perform a BFS
             while (front && ret != '1' && ret != 'U') {             // until there's at least one element in the queue
 
                 queue_elem = dequeue(&front, &rear);         // pull from queue
+                pointed_char = find_pointed_char(queue_elem->copy_tape_head, queue_elem->copy_string_pointer, queue_elem->copy_tape_offset);
+
+                //printf("Dequeue\n");                                            // DELETE
+                //printf("Current state = %d\n", queue_elem->current_state);        // DELETE
+                //print_tape(queue_elem->copy_tape_head, queue_elem->copy_string_pointer, queue_elem->copy_tape_offset);      // DELETE
+                //printf("Pointed char in the tape = %c\n", pointed_char);          // DELETE
 
                 if (queue_elem->move_count == max_transitions)     // if reached maximum number of moves, return U
                     ret = 'U';
@@ -265,22 +311,32 @@ int main(int argc, char *argv[]) {
 
                     while (move && ret != '1') {                                      // iterate over all moves
 
-                        if (move->read_char == queue_elem->copy_tape[queue_elem->copy_tape_pointer]) {     // if it's a possible move
+                        //printf("Char in the move = %c\n", move->read_char);         // DELETE
+
+                        if (move->read_char == pointed_char) {     // if it's a possible move
 
                             if (transition_list[move->end_state]->acceptance == 1)
                                 ret = '1';
                             else {
-                                tape = copy_tape(queue_elem->copy_tape);                            // duplicates actual memory tape
-                                tape[queue_elem->copy_tape_pointer] = move->write_char;         // set the character in the new memory tape
+                                tape_head = copy_tape(queue_elem->copy_tape_head);                            // duplicates actual memory tape
 
-                                tape_pointer = move_pointer(queue_elem->copy_tape_pointer, move->head_movement, &tape);               // move the pointer
+                                string_pointer = queue_elem->copy_string_pointer;
+                                tape_offset = queue_elem->copy_tape_offset;
+                                write_char(tape_head, move->write_char, string_pointer, tape_offset);         // set the character in the new memory tape
 
-                                enqueue(&front, &rear, move->end_state, tape, tape_pointer, queue_elem->move_count+1);          // enqueue new conditions
+                                tape_head = move_pointer(tape_head, &string_pointer, &tape_offset, move->head_movement);               // move the pointer
+
+                                enqueue(&front, &rear, move->end_state, tape_head, string_pointer, tape_offset, queue_elem->move_count+1);          // enqueue new conditions
+
+                                //printf("\nEnqueue\n");              // DELETE
+                                //printf("Next state %d\n", move->end_state);             // DELETE
+                                //print_tape(tape_head, string_pointer, tape_offset);             // DELETE
+                                //printf("\n");
                             }
                         }
                         move = move->next_state;
                     }
-                    empty_tape(&queue_elem->copy_tape);
+                    empty_tape(queue_elem->copy_tape_head);
                     free(queue_elem);
                 }
             }
@@ -291,7 +347,8 @@ int main(int argc, char *argv[]) {
 
             ret = '0';
             clean_queue(&front, &rear);
-            tape_pointer = 0;
+            string_pointer = 0;
+            tape_offset = 0;
         }
     }
 
@@ -317,68 +374,196 @@ int max(int a, int b) {
 }
 
 /**
-* Moves tape pointer, returns new value of it
+* Copies given buffer into a memory tape, returns head of the tape
 */
-int move_pointer(int tape_pointer, char head_movement, char* *tape) {
+tape_t* copy_buffer_to_tape(char buffer[]) {
 
-    size_t len = 0;
-    char* tmp = NULL;
+    tape_t* new_head = calloc(1, sizeof(tape_t));
+    tape_t* prev = NULL;
+    size_t len = strlen(buffer);
+
+    int i = 0;
+    int size = len/CHUNK_SIZE;
+    if (len % CHUNK_SIZE != 0)
+        size++;
+
+    new_head->offset = 0;
+    strncpy(new_head->chunk, buffer, CHUNK_SIZE);
+    new_head->prev = NULL;
+
+    prev = new_head;
+
+    for (i = 1; i < size; i++) {
+        prev->next = calloc(1, sizeof(tape_t));
+        prev->next->offset = i;
+        strncpy(prev->next->chunk, &buffer[500*i], CHUNK_SIZE);
+
+        prev->next->prev = prev;
+        prev = prev->next;
+    }
+
+    prev->next = NULL;
+
+    if (len % CHUNK_SIZE != 0)
+        for (i = len%CHUNK_SIZE; i < CHUNK_SIZE; i++)
+            prev->chunk[i] = '_';
+
+    return new_head;
+}
+
+/**
+* Finds char pointed in the memory tape
+*/
+char find_pointed_char(tape_t* head, int string_pointer, int tape_offset) {
+
+    tape_t* curr = head;
+
+    while (curr) {
+        if (curr->offset == tape_offset)
+            return curr->chunk[string_pointer];
+        curr = curr->next;
+    }
+
+    return '\0';
+}
+
+/**
+* Sets new char in the memory tape
+*/
+void write_char(tape_t* head, char write_char, int string_pointer, int tape_offset) {
+
+    tape_t* curr = head;
+
+    while (curr) {
+        if (curr->offset == tape_offset)
+            curr->chunk[string_pointer] = write_char;
+        curr = curr->next;
+    }
+}
+
+/**
+* Moves tape pointer and tape_offset, returns head of tape
+*/
+tape_t* move_pointer(tape_t* head, int* string_pointer, int* tape_offset, char head_movement) {
+
+    tape_t* tmp = head;
+    int i = 0;
 
     if (head_movement == 'R') {
-        len = strlen(*tape);
-        if (tape_pointer == len-1) {
-            *tape = realloc(*tape, (len+2) * sizeof(char));          // strlen does not count the '\0' which I want to keep
-            strcat(*tape, "_\0");
+
+        if (*string_pointer % CHUNK_SIZE == CHUNK_SIZE-1) {         // if it's the last char in the chunk
+
+            while (tmp && tmp->offset != *tape_offset)          // find correct offset element in the tape
+                tmp = tmp->next;
+
+            if (!tmp->next) {                                   // if moving to the next offset brings to a not initialized element
+                tmp->next = calloc(1, sizeof(tape_t));
+                tmp->next->offset = ++(*tape_offset);
+                for (i = 0; i < CHUNK_SIZE; i++)                // sets all the new chunk element to '_'
+                    tmp->next->chunk[i] = '_';
+
+                tmp->next->next = NULL;
+                tmp->next->prev = tmp;
+            }
+            else
+                (*tape_offset)++;
+
+            (*string_pointer) = 0;
         }
-        tape_pointer++;
+        else
+            (*string_pointer)++;
     }
     else if (head_movement == 'L') {
-        if (tape_pointer == 0) {
-            len = strlen(*tape);
-            tmp = *tape;
-            *tape = calloc(len+2, sizeof(char));          // strlen does not count the '\0' which I want to keep
-            *tape[0] = '_';
-            strcat(*tape, tmp);
-            tape_pointer = 1;               // tape pointer needs to be at 0 after --
-            free(tmp);
+
+        if (*string_pointer == 0) {                             // if it's the first char in the chunk
+
+            while (tmp && tmp->offset != *tape_offset)          // find correct offset element in the tape
+                tmp = tmp->next;
+
+            if (!tmp->prev) {                                   // if moving to the next offset brings to a not initialized element
+                tmp->prev = calloc(1, sizeof(tape_t));
+                tmp->prev->offset = --(*tape_offset);
+                for (i = 0; i < CHUNK_SIZE; i++)                // sets all the new chunk element to '_'
+                    tmp->prev->chunk[i] = '_';
+
+                tmp->prev->prev = NULL;
+                tmp->prev->next = tmp;
+
+                head = tmp->prev;                               // changes new head
+            }
+            else
+                (*tape_offset)--;
+
+            (*string_pointer) = CHUNK_SIZE-1;
         }
-        tape_pointer--;
+        else
+            (*string_pointer)--;
     }
 
-    return tape_pointer;
+    return head;
 }
 
 /**
 * Empties memory tape list, sets tape_head = NULL
 */
-void empty_tape(char* *tape) {
+void empty_tape(tape_t* head) {
 
-    free(*tape);
-    *tape = NULL;
+    tape_t* curr = head;
+    tape_t* next = NULL;
+
+    while (curr) {
+        next = curr->next;
+        free(curr);
+        curr = next;
+    }
+    head = NULL;
 }
 
 /**
 * Duplicates memory tape, returns new head
 */
-char* copy_tape(char* original_list) {
+tape_t* copy_tape(tape_t* original_head) {
 
-    size_t len = strlen(original_list);
-    char* list = calloc(len+1, sizeof(char));
+    tape_t* curr = NULL;
+    tape_t* prev = NULL;
 
-    strncpy(list, original_list, len);              // strncpy appends '\0' at the end
+    if (!original_head)
+        return NULL;
 
-    return list;
+    tape_t* new_head = calloc(1, sizeof(tape_t));           // starts with head
+    new_head->offset = original_head->offset;
+    strncpy(new_head->chunk, original_head->chunk, CHUNK_SIZE);
+
+    new_head->prev = NULL;
+    prev = new_head;
+    curr = original_head->next;
+
+    while(curr) {                                          // until original list is finished
+        prev->next = calloc(1, sizeof(tape_t));
+        prev->next->offset = curr->offset;
+        strncpy(prev->next->chunk, curr->chunk, CHUNK_SIZE);
+
+        prev->next->prev = prev;
+
+        prev = prev->next;
+        curr = curr->next;
+    }
+
+    prev->next = NULL;
+
+    return new_head;
 }
 
 /**
 * Adds a new node to the queue
 */
-void enqueue(queue_t* *front, queue_t* *rear, int current_state, char* copy_tape, int copy_tape_pointer, int move_count) {
+void enqueue(queue_t* *front, queue_t* *rear, int current_state, tape_t* copy_tape_head, int copy_string_pointer, int copy_tape_offset, int move_count) {
 
     queue_t* tmp = calloc(1, sizeof(queue_t));
 	tmp->current_state = current_state;
-	tmp->copy_tape = copy_tape;
-	tmp->copy_tape_pointer = copy_tape_pointer;
+	tmp->copy_tape_head = copy_tape_head;
+	tmp->copy_string_pointer = copy_string_pointer;
+	tmp->copy_tape_offset = copy_tape_offset;
 	tmp->move_count = move_count;
 
 	tmp->next = NULL;
@@ -415,7 +600,7 @@ void clean_queue(queue_t* *front, queue_t* *rear) {
 
     while (*front) {
         tmp = dequeue(front, rear);
-        empty_tape(&tmp->copy_tape);
+        empty_tape(tmp->copy_tape_head);
         free(tmp);
     }
 }
