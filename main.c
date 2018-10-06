@@ -179,7 +179,7 @@ void print_queue(queue_t* front) {
 
 int main(int argc, char *argv[]) {
 
-    //FILE *file = fopen("Test/IncreasingStuff.txt", "r");
+    //FILE *file = fopen("Test/FancyLoops.txt", "r");
 
     int max_size = INITIAL_GRAPH_SIZE, size = 0;
     int i = 0;
@@ -262,7 +262,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    for (i = 0; i < size; i++)            // fills empty states on transition_list
+    /** filling array spaces of state with no transition and not final */
+    for (i = 0; i < size; i++)
         if (!transition_list[i]) {
             next_tr = calloc(1, sizeof(transition_t));
             next_tr->start_state = -1;      // sentinel value, no transitions for this state
@@ -298,10 +299,10 @@ int main(int argc, char *argv[]) {
                 queue_elem = dequeue(&front, &rear);         // pull from queue
                 pointed_char = find_pointed_char(queue_elem->copy_tape_head, queue_elem->copy_string_pointer, queue_elem->copy_tape_offset);
 
-                //printf("Dequeue\n");                                            // DELETE
-                //printf("Current state = %d\n", queue_elem->current_state);        // DELETE
-                //print_tape(queue_elem->copy_tape_head, queue_elem->copy_string_pointer, queue_elem->copy_tape_offset);      // DELETE
-                //printf("Pointed char in the tape = %c\n", pointed_char);          // DELETE
+                /*printf("Dequeue\n");                                            // DELETE
+                printf("Current state = %d\n", queue_elem->current_state);        // DELETE
+                print_tape(queue_elem->copy_tape_head, queue_elem->copy_string_pointer, queue_elem->copy_tape_offset);      // DELETE
+                printf("Pointed char in the tape = %c\n", pointed_char); */         // DELETE
 
                 if (queue_elem->move_count == max_transitions)     // if reached maximum number of moves, return U
                     ret = 'U';
@@ -328,10 +329,10 @@ int main(int argc, char *argv[]) {
 
                                 enqueue(&front, &rear, move->end_state, tape_head, string_pointer, tape_offset, queue_elem->move_count+1);          // enqueue new conditions
 
-                                //printf("\nEnqueue\n");              // DELETE
-                                //printf("Next state %d\n", move->end_state);             // DELETE
-                                //print_tape(tape_head, string_pointer, tape_offset);             // DELETE
-                                //printf("\n");
+                                /*printf("\nEnqueue\n");              // DELETE
+                                printf("Next state %d\n", move->end_state);             // DELETE
+                                print_tape(tape_head, string_pointer, tape_offset);             // DELETE
+                                printf("\n");*/
                             }
                         }
                         move = move->next_state;
@@ -384,7 +385,8 @@ tape_t* copy_buffer_to_tape(char buffer[]) {
 
     int i = 0;
     int size = len/CHUNK_SIZE;
-    if (len % CHUNK_SIZE != 0)
+    int mod = len%CHUNK_SIZE;
+    if (mod != 0)
         size++;
 
     new_head->offset = 0;
@@ -392,20 +394,18 @@ tape_t* copy_buffer_to_tape(char buffer[]) {
     new_head->prev = NULL;
 
     prev = new_head;
-
     for (i = 1; i < size; i++) {
         prev->next = calloc(1, sizeof(tape_t));
         prev->next->offset = i;
-        strncpy(prev->next->chunk, &buffer[500*i], CHUNK_SIZE);
+        strncpy(prev->next->chunk, &buffer[CHUNK_SIZE*i], CHUNK_SIZE);
 
         prev->next->prev = prev;
         prev = prev->next;
     }
-
     prev->next = NULL;
 
-    if (len % CHUNK_SIZE != 0)
-        for (i = len%CHUNK_SIZE; i < CHUNK_SIZE; i++)
+    if (mod != 0)
+        for (i = mod; i < CHUNK_SIZE; i++)
             prev->chunk[i] = '_';
 
     return new_head;
@@ -451,7 +451,7 @@ tape_t* move_pointer(tape_t* head, int* string_pointer, int* tape_offset, char h
 
     if (head_movement == 'R') {
 
-        if (*string_pointer % CHUNK_SIZE == CHUNK_SIZE-1) {         // if it's the last char in the chunk
+        if (*string_pointer%CHUNK_SIZE == CHUNK_SIZE-1) {         // if it's the last char in the chunk
 
             while (tmp && tmp->offset != *tape_offset)          // find correct offset element in the tape
                 tmp = tmp->next;
@@ -468,7 +468,7 @@ tape_t* move_pointer(tape_t* head, int* string_pointer, int* tape_offset, char h
             else
                 (*tape_offset)++;
 
-            (*string_pointer) = 0;
+            *string_pointer = 0;
         }
         else
             (*string_pointer)++;
@@ -494,7 +494,7 @@ tape_t* move_pointer(tape_t* head, int* string_pointer, int* tape_offset, char h
             else
                 (*tape_offset)--;
 
-            (*string_pointer) = CHUNK_SIZE-1;
+            *string_pointer = CHUNK_SIZE-1;
         }
         else
             (*string_pointer)--;
